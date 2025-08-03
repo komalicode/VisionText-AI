@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Image to ChatGPT OCR</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&family=Caveat&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #fff0f5;
+      --text-color: #4a4a4a;
+      --card-bg: #ffe4e1;
+      --button-bg: #ffb6c1;
+      --button-hover: #ff69b4;
+      --font-family: 'Comic Neue', 'Caveat', cursive;
+    }
+
+    body.dark-mode {
+      --bg-color: #2d2d2d;
+      --text-color: #fefefe;
+      --card-bg: #3d3d3d;
+      --button-bg: #ff99cc;
+      --button-hover: #ff66a3;
+    }
+
+    body {
+      font-family: var(--font-family);
+      background: var(--bg-color);
+      color: var(--text-color);
+      padding: 20px;
+      transition: all 0.3s ease;
+      overflow-x: hidden;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 28px;
+      animation: float 2s infinite ease-in-out;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    .container {
+      max-width: 800px;
+      margin: auto;
+    }
+
+    form, .result-box {
+      background: var(--card-bg);
+      padding: 20px;
+      border-radius: 20px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.05);
+      margin-bottom: 20px;
+    }
+
+    input[type="file"],
+    input[type="submit"],
+    button {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      font-size: 16px;
+      background: var(--button-bg);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.3s ease, transform 0.2s;
+    }
+
+    input[type="submit"]:hover,
+    button:hover {
+      background: var(--button-hover);
+      transform: scale(1.03);
+    }
+
+    textarea {
+      width: 100%;
+      height: 200px;
+      padding: 12px;
+      font-size: 16px;
+      border: 2px dashed #ffb6c1;
+      border-radius: 12px;
+      resize: vertical;
+      background: #fffafc;
+      color: #111;
+      font-family: var(--font-family);
+    }
+
+    body.dark-mode textarea {
+      background: #4a4a4a;
+      color: #fefefe;
+      border-color: #ff99cc;
+    }
+
+    .buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .toggle-dark {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: var(--button-bg);
+      color: white;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 16px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      transition: transform 0.3s ease;
+    }
+
+    .toggle-dark:hover {
+      transform: rotate(20deg);
+      background: var(--button-hover);
+    }
+
+    @media (min-width: 600px) {
+      .buttons {
+        flex-direction: row;
+      }
+    }
+
+    /* Floating Chat Bubble */
+    .chat-bubble {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #ffb6c1;
+      color: white;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      cursor: pointer;
+      animation: bounce 2s infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    video, canvas {
+      width: 100%;
+      border-radius: 12px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <button class="toggle-dark" onclick="playSound(); toggleDarkMode()">🌗</button>
+  <div class="chat-bubble" onclick="alert('Hi! Upload your image and I’ll help you query ChatGPT 😊')">💬</div>
+
+  <div class="container">
+    <h2>🌸 Upload Image → Extract → Ask ChatGPT</h2>
+    <form method="POST" enctype="multipart/form-data" id="uploadForm">
+      <input type="file" name="image" id="imageInput" accept="image/*" required>
+      <input type="submit" value="🌼 Extract Text">
+    </form>
+
+    <button onclick="openCamera()">📸 Open Camera</button>
+    <video id="video" autoplay playsinline style="display:none;"></video>
+    <button onclick="capturePhoto()" style="display:none;">📸 Capture Photo</button>
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    {% if extracted_text %}
+    <div class="result-box">
+      <h3>📝 Extracted Text:</h3>
+      <textarea id="extractedText" readonly>{{ extracted_text }}</textarea>
+
+      <div class="buttons">
+        <button onclick="openInChatGPT()">🧠 Ask ChatGPT</button>
+        <button onclick="fixOCRErrors()">🛠 Fix OCR & Get Answer</button>
+        <button onclick="copyText()">📋 Copy</button>
+        <button onclick="downloadText()">📥 Download</button>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <audio id="toggleSound" src="https://cdn.pixabay.com/audio/2022/10/26/audio_7706ef15ce.mp3"></audio>
+
+  <script>
+    function toggleDarkMode() {
+      document.body.classList.toggle("dark-mode");
+    }
+
+    function playSound() {
+      const audio = document.getElementById("toggleSound");
+      audio.currentTime = 0;
+      audio.play();
+    }
+
+    function openInChatGPT() {
+      const extracted = document.getElementById("extractedText").value;
+      const prompt = `Here is some text extracted from an image:\n\n${extracted}\n\nYou can now ask a question about it.`;
+      const url = `https://chat.openai.com/?model=gpt-4&prompt=${encodeURIComponent(prompt)}`;
+      window.open(url, "_blank");
+    }
+
+    function fixOCRErrors() {
+      const extracted = document.getElementById("extractedText").value;
+      const prompt = `The following text was extracted using OCR, but may have errors. Please fix it and provide explanation or answer:\n\n"${extracted}"`;
+      const url = `https://chat.openai.com/?model=gpt-4&prompt=${encodeURIComponent(prompt)}`;
+      window.open(url, "_blank");
+    }
+
+    function copyText() {
+      const text = document.getElementById("extractedText").value;
+      navigator.clipboard.writeText(text).then(() => alert("Copied to clipboard!"));
+    }
+
+    function downloadText() {
+      const text = document.getElementById("extractedText").value;
+      const blob = new Blob([text], { type: "text/plain" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "extracted_text.txt";
+      link.click();
+    }
+
+    let stream;
+
+    async function openCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        const video = document.getElementById("video");
+        video.srcObject = stream;
+        video.style.display = "block";
+        document.querySelector("button[onclick='capturePhoto()']").style.display = "block";
+      } catch (error) {
+        alert("Camera access denied or unavailable");
+      }
+    }
+
+    function capturePhoto() {
+      const video = document.getElementById("video");
+      const canvas = document.getElementById("canvas");
+      const context = canvas.getContext("2d");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(blob => {
+        const file = new File([blob], "captured.png", { type: "image/png" });
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        document.getElementById("imageInput").files = dataTransfer.files;
+        stream.getTracks().forEach(track => track.stop());
+        document.getElementById("video").style.display = "none";
+        document.querySelector("button[onclick='capturePhoto()']").style.display = "none";
+        document.getElementById("uploadForm").submit();
+      });
+    }
+  </script>
+</body>
+</html>
